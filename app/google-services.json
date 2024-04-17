@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "624524908091",
+    "project_id": "kotlin-b6759",
+    "storage_bucket": "kotlin-b6759.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:624524908091:android:a4e944382bb1c277e56e1e",
+        "android_client_info": {
+          "package_name": "com.example.p10_music_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAt_CPCKxSYjQf-rzj5V3NshCAIhGKLWIw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
