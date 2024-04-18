@@ -85,7 +85,9 @@ fun MusicScreen() {
                     enter = slideInVertically(initialOffsetY = { it }),
                     exit = slideOutVertically(targetOffsetY = { -it })
                 ) {
-                    MusicCard(musicInfo = musicInfo)
+                    MusicCard(musicInfo = musicInfo,
+                        onDelete = { deleteMusicInfo(musicInfo) },
+                        onEdit = { updateMusicInfo(musicInfo) })
                 }
             }
         }
@@ -178,6 +180,7 @@ fun MusicDialog(
                             onClick = {
                                 onMusicInfoEntered(
                                     MusicInfo(
+                                        documentId = "",
                                         musicName = musicName,
                                         genre = genre,
                                         movieName = movieName,
@@ -197,7 +200,9 @@ fun MusicDialog(
 }
 
 @Composable
-fun MusicCard(musicInfo: MusicInfo) {
+fun MusicCard(musicInfo: MusicInfo, onDelete: (MusicInfo) -> Unit, // Add a callback function for deletion
+              onEdit: (MusicInfo) -> Unit) {
+    var showEditDialog by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .padding(vertical = 8.dp)
@@ -218,11 +223,23 @@ fun MusicCard(musicInfo: MusicInfo) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(onClick = {  }) {
+                IconButton(onClick = { showEditDialog = true }) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit")
                 }
+                if (showEditDialog) {
+                    EditMusicDialog(
+                        musicInfo = musicInfo,
+                        onDismiss = { showEditDialog = false },
+                        onMusicInfoUpdated = { updatedInfo ->
+                            // Update music info in Firestore
+                            updateMusicInfo(updatedInfo)
+                            showEditDialog = false
+                        }
+                    )
+                }
+
                 Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = { }, modifier = Modifier.background(Color(0xFFD22B2B)).clip(
+                IconButton(onClick = {onDelete(musicInfo) }, modifier = Modifier.clip(
                     RoundedCornerShape(16.dp)
                 )) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
@@ -231,8 +248,91 @@ fun MusicCard(musicInfo: MusicInfo) {
         }
     }
 }
+@Composable
+fun EditMusicDialog(
+    musicInfo: MusicInfo,
+    onDismiss: () -> Unit,
+    onMusicInfoUpdated: (MusicInfo) -> Unit
+) {
+    var editedMusicName by remember { mutableStateOf(musicInfo.musicName) }
+    var editedGenre by remember { mutableStateOf(musicInfo.genre) }
+    var editedMovieName by remember { mutableStateOf(musicInfo.movieName) }
+    var editedDuration by remember { mutableStateOf(musicInfo.duration) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnClickOutside = false),
+        content = {
+            Card(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .background(Color.White)
+                    .clip(RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = editedMusicName,
+                        onValueChange = { editedMusicName = it },
+                        label = { Text("Music Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = editedGenre,
+                        onValueChange = { editedGenre = it },
+                        label = { Text("Genre") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = editedMovieName,
+                        onValueChange = { editedMovieName = it },
+                        label = { Text("Movie Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextField(
+                        value = editedDuration,
+                        onValueChange = { editedDuration = it },
+                        label = { Text("Duration") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(onClick = onDismiss, modifier = Modifier.padding(end = 8.dp)) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
+                                onMusicInfoUpdated(
+                                    MusicInfo(
+                                        documentId = musicInfo.documentId,
+                                        musicName = editedMusicName,
+                                        genre = editedGenre,
+                                        movieName = editedMovieName,
+                                        duration = editedDuration
+                                    )
+                                )
+                            },
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
 
 data class MusicInfo(
+    val documentId:String ,
     val musicName: String,
     val genre: String,
     val movieName: String,
@@ -241,16 +341,19 @@ data class MusicInfo(
 
 suspend fun fetchMusicData(callback: (List<MusicInfo>) -> Unit) {
     try {
+
         val querySnapshot = db.collection("Music").get().await()
 
         val musicList = mutableListOf<MusicInfo>()
 
         for (document in querySnapshot.documents) {
+            val documentId = document.id
             val musicName = document.getString("musicName") ?: ""
             val genre = document.getString("genre") ?: ""
             val movieName = document.getString("movieName") ?: ""
             val duration = document.getString("duration") ?: ""
-            musicList.add(MusicInfo(musicName, genre, movieName, duration))
+            musicList.add(MusicInfo(documentId,musicName, genre, movieName, duration))
+            Log.d("text-check", "$musicList")
         }
 
         // Update the musicList state variable
@@ -278,4 +381,46 @@ fun saveMusicInfo(info: MusicInfo) {
         .addOnFailureListener { e ->
             Log.w(TAG, "Error adding document", e)
         }
+}
+fun updateMusicInfo(updatedInfo: MusicInfo) {
+    try {Log.d("text-check", "$updatedInfo")
+        // Get reference to the Firestore document based on some unique identifier
+        val documentRef = db.collection("Music").document("${updatedInfo.documentId}") // Replace "document_id_here" with the actual document ID
+
+        // Create a map of the updated music information
+        val updatedMusicInfoMap = mapOf(
+            "musicName" to updatedInfo.musicName,
+            "genre" to updatedInfo.genre,
+            "movieName" to updatedInfo.movieName,
+            "duration" to updatedInfo.duration
+        )
+
+        // Update the document with the new data
+        documentRef.update(updatedMusicInfoMap)
+            .addOnSuccessListener {
+                Log.d(TAG, "DocumentSnapshot successfully updated!")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Error updating document", e)
+            }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error updating music info", e)
+    }
+}
+fun deleteMusicInfo(musicInfo: MusicInfo) {
+    try {
+        // Get reference to the Firestore document based on some unique identifier
+        val documentRef = db.collection("Music").document("${musicInfo.documentId}") // Replace "document_id_here" with the actual document ID
+
+        // Delete the document
+        documentRef.delete()
+            .addOnSuccessListener {
+                Log.d(TAG, "DocumentSnapshot successfully deleted!")
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Error deleting document", e)
+            }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error deleting music info", e)
+    }
 }
